@@ -14,7 +14,9 @@
 		AEF9852C1B959CF4000E6339 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AEF9852B1B959CF4000E6339 /* Images.xcassets */; };
 		AEF9852F1B959CF4000E6339 /* LaunchScreen.xib in Resources */ = {isa = PBXBuildFile; fileRef = AEF9852D1B959CF4000E6339 /* LaunchScreen.xib */; };
 		AEF9853B1B959CF4000E6339 /* ____Tests.m in Sources */ = {isa = PBXBuildFile; fileRef = AEF9853A1B959CF4000E6339 /* ____Tests.m */; };
-		C5856F711C279CB200B8F8D8 /* OpenGLView20.m in Sources */ = {isa = PBXBuildFile; fileRef = C5856F701C279CB200B8F8D8 /* OpenGLView20.m */; };
+		C548A79F1C2BF8C8001CDB85 /* AAPLEAGLLayer.m in Sources */ = {isa = PBXBuildFile; fileRef = C548A79C1C2BF8C8001CDB85 /* AAPLEAGLLayer.m */; };
+		C548A7A01C2BF8C8001CDB85 /* Shader.fsh in Resources */ = {isa = PBXBuildFile; fileRef = C548A79D1C2BF8C8001CDB85 /* Shader.fsh */; };
+		C548A7A11C2BF8C8001CDB85 /* Shader.vsh in Resources */ = {isa = PBXBuildFile; fileRef = C548A79E1C2BF8C8001CDB85 /* Shader.vsh */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -41,8 +43,10 @@
 		AEF985341B959CF4000E6339 /* 视频录制Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "视频录制Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AEF985391B959CF4000E6339 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AEF9853A1B959CF4000E6339 /* ____Tests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "____Tests.m"; sourceTree = "<group>"; };
-		C5856F6F1C279CB200B8F8D8 /* OpenGLView20.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OpenGLView20.h; sourceTree = "<group>"; };
-		C5856F701C279CB200B8F8D8 /* OpenGLView20.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OpenGLView20.m; sourceTree = "<group>"; };
+		C548A79B1C2BF8C8001CDB85 /* AAPLEAGLLayer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AAPLEAGLLayer.h; sourceTree = "<group>"; };
+		C548A79C1C2BF8C8001CDB85 /* AAPLEAGLLayer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AAPLEAGLLayer.m; sourceTree = "<group>"; };
+		C548A79D1C2BF8C8001CDB85 /* Shader.fsh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.glsl; path = Shader.fsh; sourceTree = "<group>"; };
+		C548A79E1C2BF8C8001CDB85 /* Shader.vsh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.glsl; path = Shader.vsh; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -88,8 +92,7 @@
 				AEF985231B959CF4000E6339 /* AppDelegate.m */,
 				AEF985251B959CF4000E6339 /* ViewController.h */,
 				AEF985261B959CF4000E6339 /* ViewController.m */,
-				C5856F6F1C279CB200B8F8D8 /* OpenGLView20.h */,
-				C5856F701C279CB200B8F8D8 /* OpenGLView20.m */,
+				C548A79A1C2BF8C8001CDB85 /* openGL */,
 				AEF985281B959CF4000E6339 /* Main.storyboard */,
 				AEF9852B1B959CF4000E6339 /* Images.xcassets */,
 				AEF9852D1B959CF4000E6339 /* LaunchScreen.xib */,
@@ -122,6 +125,17 @@
 				AEF985391B959CF4000E6339 /* Info.plist */,
 			);
 			name = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		C548A79A1C2BF8C8001CDB85 /* openGL */ = {
+			isa = PBXGroup;
+			children = (
+				C548A79B1C2BF8C8001CDB85 /* AAPLEAGLLayer.h */,
+				C548A79C1C2BF8C8001CDB85 /* AAPLEAGLLayer.m */,
+				C548A79D1C2BF8C8001CDB85 /* Shader.fsh */,
+				C548A79E1C2BF8C8001CDB85 /* Shader.vsh */,
+			);
+			path = openGL;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -173,6 +187,7 @@
 				TargetAttributes = {
 					AEF9851A1B959CF4000E6339 = {
 						CreatedOnToolsVersion = 6.4;
+						DevelopmentTeam = XPUHU5984R;
 					};
 					AEF985331B959CF4000E6339 = {
 						CreatedOnToolsVersion = 6.4;
@@ -204,9 +219,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C548A7A01C2BF8C8001CDB85 /* Shader.fsh in Resources */,
 				AEF9852A1B959CF4000E6339 /* Main.storyboard in Resources */,
 				AEF9852F1B959CF4000E6339 /* LaunchScreen.xib in Resources */,
 				AEF9852C1B959CF4000E6339 /* Images.xcassets in Resources */,
+				C548A7A11C2BF8C8001CDB85 /* Shader.vsh in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -227,7 +244,7 @@
 				AEF985271B959CF4000E6339 /* ViewController.m in Sources */,
 				AEF985241B959CF4000E6339 /* AppDelegate.m in Sources */,
 				AEF985211B959CF4000E6339 /* main.m in Sources */,
-				C5856F711C279CB200B8F8D8 /* OpenGLView20.m in Sources */,
+				C548A79F1C2BF8C8001CDB85 /* AAPLEAGLLayer.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -353,8 +370,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_FILE = "视频录制/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.tong;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -363,8 +382,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_FILE = "视频录制/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.tong;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;

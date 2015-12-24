@@ -7,13 +7,24 @@
 //
 
 #import "ViewController.h"
-#import "OpenGLView20.h"
+#import "AAPLEAGLLayer.h"
 #import <AVFoundation/AVFoundation.h>
 #import <AssetsLibrary/AssetsLibrary.h>
+#import <VideoToolbox/VideoToolbox.h>
+#define fps 30
 typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
-
+static void outputCallback(void *  outputCallbackRefCon,void *  sourceFrameRefCon,OSStatus status,VTEncodeInfoFlags infoFlags,
+                            CMSampleBufferRef sampleBuffer ){
+    NSLog(@"完成！！status:%d",status);
+    
+}
 @interface ViewController ()<AVCaptureFileOutputRecordingDelegate,AVCaptureVideoDataOutputSampleBufferDelegate>//视频文件输出代理
+{
+    long frameCount;
+    VTCompressionSessionRef _compressionSession;
+    AAPLEAGLLayer *openGLLayer;
 
+}
 @property (strong,nonatomic) AVCaptureSession *captureSession;//负责输入和输出设备之间的数据传递
 @property (strong,nonatomic) AVCaptureDeviceInput *captureDeviceInput;//负责从AVCaptureDevice获得输入数据
 @property (strong,nonatomic) AVCaptureMovieFileOutput *captureMovieFileOutput;//视频输出流
@@ -32,7 +43,12 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 @property (weak, nonatomic) IBOutlet UIView *viewContainer;
 @property (weak, nonatomic) IBOutlet UIButton *takeButton;//拍照按钮
 @property (weak, nonatomic) IBOutlet UIImageView *focusCursor; //聚焦光标
-@property (weak, nonatomic) IBOutlet OpenGLView20 *playView;    ///播放view
+@property (weak, nonatomic) IBOutlet UIView *playView;    ///播放view
+
+@property CADisplayLink *displayLink;
+@property NSMutableArray *outputFrames;
+@property NSMutableArray *presentationTimes;
+@property dispatch_semaphore_t bufferSemaphore;
 
 
 @end
@@ -42,6 +58,18 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 #pragma mark - 控制器视图方法
 - (void)viewDidLoad {
     [super viewDidLoad];
+    
+    self.outputFrames = [NSMutableArray new];
+    self.presentationTimes = [NSMutableArray new];
+    
+    self.displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
+    [self.displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+    [self.displayLink setPaused:YES];
+    self.bufferSemaphore = dispatch_semaphore_create(0);
+    
+
+    
+
 }
 
 -(void)viewWillAppear:(BOOL)animated{
@@ -101,6 +129,20 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
     if ([_captureSession canAddOutput:_captureDataOutput]) {
         [_captureSession addOutput:_captureDataOutput];
     }
+    OSStatus t = VTCompressionSessionCreate(
+                               NULL,
+                               640,
+                               480,
+                               kCMVideoCodecType_H264,
+                               NULL,
+                               NULL,
+                               NULL,
+                               outputCallback,
+                               NULL,
+                               &_compressionSession);
+    NSLog(@"%d",t);
+    CFDictionaryRef supperDic;
+    VTSessionCopySupportedPropertyDictionary(_compressionSession,&supperDic);
     
     
     //创建视频预览层，用于实时展示摄像头状态
@@ -133,6 +175,7 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 -(BOOL)shouldAutorotate{
     return self.enableRotation;
 }
+
 
 ////屏幕旋转时调整视频预览图层的方向
 //-(void)willTransitionToTraitCollection:(UITraitCollection *)newCollection withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator{
@@ -180,7 +223,7 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
         NSArray* b = self.captureDataOutput.availableVideoCVPixelFormatTypes;
         NSLog(@"%@", a);
         NSLog(@"%@", b);
-        self.captureDataOutput.videoSettings = @{(id)kCVPixelBufferPixelFormatTypeKey:b[2]};
+        self.captureDataOutput.videoSettings = @{(id)kCVPixelBufferPixelFormatTypeKey:b[0]};
         [self.captureDataOutput setSampleBufferDelegate:self queue:dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)];
     }
     else{
@@ -268,7 +311,9 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 }
 ////收到buffer
 bool i = false;
+
 -(void)captureOutput:(AVCaptureOutput *)captureOutput didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection {
+
 //    CMSampleTimingInfo info;
 //    CMSampleTimingInfo infoArry[7];
 //    
@@ -276,15 +321,54 @@ bool i = false;
 //    OSStatus status =  CMSampleBufferGetSampleTimingInfo(sampleBuffer, 0, &info);
 //    OSStatus status1 = CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, 1, infoArry, &count);
 //    CMItemCount c =CMSampleBufferGetNumSamples(sampleBuffer);
+    frameCount++;
+    CVImageBufferRef imgRef = CMSampleBufferGetImageBuffer(sampleBuffer);
+    [self startDecodeData];
+    [self getDecodeImageData:imgRef];
     
     
-    CMTime durationTime = CMSampleBufferGetDuration(sampleBuffer);
-    CMTime presentTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
-    CMTime decodeTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
-    [self printCMTime:durationTime flg:@"duration"];
-    [self printCMTime:decodeTime flg:@"decode"];
-    [self printCMTime:presentTime  flg:@"present"];
+//    OSType t = CVPixelBufferGetPixelFormatType(imgRef);
 //    
+//    CMTime duration = CMTimeMake(1, fps);
+//    CMTime timeStamp = CMTimeMake(frameCount, fps);
+//    VTCompressionSessionEncodeFrame(
+//                                    _compressionSession,
+//                                    imgRef,
+//                                    timeStamp,
+//                                    duration, // may be kCMTimeInvalid
+//                                    NULL,
+//                                    NULL,
+//                                    NULL );
+//
+//    CMVideoFormatDescriptionRef formatDesc;
+//    CMVideoFormatDescriptionCreateForImageBuffer(NULL, imgRef, &formatDesc);
+//    
+//    CFArrayRef arry = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, YES);
+//    
+//    CFDictionaryRef dic = CMFormatDescriptionGetExtensions(formatDesc);
+//    CMMediaType type = CMFormatDescriptionGetMediaType(formatDesc);
+//    CMMediaType subType = CMFormatDescriptionGetMediaSubType(formatDesc);
+//
+//
+//    
+//    CMTime durationTime = CMSampleBufferGetDuration(sampleBuffer);
+//    CMTime presentTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
+//    CMTime decodeTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
+//    [self printCMTime:durationTime flg:@"duration"];
+//    [self printCMTime:decodeTime flg:@"decode"];
+//    [self printCMTime:presentTime  flg:@"present"];
+    
+//    Timing information. You get accurate timestamps for both the original presentation time and the decode time using CMSampleBufferGetPresentationTimeStamp and CMSampleBufferGetDecodeTimeStamp respectively.
+//        Format information. The format information is encapsulated in a CMFormatDescription object (see CMFormatDescriptionRef). From the format description, you can get for example the pixel type and video dimensions using CMVideoFormatDescriptionGetCodecType and CMVideoFormatDescriptionGetDimensions respectively.
+//            Metadata. Metadata are stored in a dictionary as an attachment. You use CMGetAttachment to retrieve the dictionary:
+//            CMSampleBufferRef sampleBuffer = Get a sample buffer;
+//    CFDictionaryRef metadataDictionary =
+//    CMGetAttachment(sampleBuffer, CFSTR("MetadataDictionary", NULL);
+//                    if (metadataDictionary) {
+//                        // Do something with the metadata.
+//                    }
+    
+//
 //    CVImageBufferRef  imgData = CMSampleBufferGetImageBuffer(sampleBuffer);
 //    
 //    
@@ -661,4 +745,85 @@ bool i = false;
         
     }];
 }
+
+
+
+
+#pragma mark   opengl
+- (void)displayPixelBuffer:(CVImageBufferRef)imageBuffer
+{
+    int width = (int)CVPixelBufferGetWidth(imageBuffer);
+    int height = (int)CVPixelBufferGetHeight(imageBuffer);
+    CGFloat halfWidth = self.view.frame.size.width;
+    CGFloat halfheight = self.view.frame.size.height;
+    if (width > halfWidth || height > halfheight) {
+        width /= 2;
+        height /= 2;
+    }
+    if (!openGLLayer) {
+        openGLLayer = [[AAPLEAGLLayer alloc] init];
+        [openGLLayer setFrame:CGRectMake((self.view.frame.size.width-width)/2, (self.view.frame.size.height-height)/2, width, height)];
+        openGLLayer.presentationRect = CGSizeMake(width, height);
+        
+        [openGLLayer setupGL];
+        [self.playView.layer addSublayer:openGLLayer];
+        
+    }
+    
+    [openGLLayer displayPixelBuffer:imageBuffer];
+    
+}
+
+
+
+- (void)displayLinkCallback:(CADisplayLink *)sender
+{
+    if ([self.outputFrames count] && [self.presentationTimes count]) {
+        CVImageBufferRef imageBuffer = NULL;
+        NSNumber *insertionIndex = nil;
+        id imageBufferObject = nil;
+        @synchronized(self){
+            insertionIndex = [self.presentationTimes firstObject];
+            imageBufferObject = [self.outputFrames firstObject];
+            imageBuffer = (__bridge CVImageBufferRef)imageBufferObject;
+            
+            if (imageBufferObject) {
+                [self.outputFrames removeObjectAtIndex:0];
+            }
+            if (insertionIndex) {
+                [self.presentationTimes removeObjectAtIndex:0];
+                if ([self.presentationTimes count] == 3) {
+                    dispatch_semaphore_signal(self.bufferSemaphore);
+                }
+            }
+            
+            if (imageBuffer) {
+                [self displayPixelBuffer:imageBuffer];
+            }
+        }
+        
+    }
+}
+#pragma --mark H264DecoderDelegate
+-(void) startDecodeData
+{
+    if ([self.presentationTimes count] >= 5) {
+        [self.displayLink setPaused:NO];
+        dispatch_semaphore_wait(self.bufferSemaphore, DISPATCH_TIME_FOREVER);
+    }
+}
+
+-(void) getDecodeImageData:(CVImageBufferRef) imageBuffer
+{
+    id imageBufferObject = (__bridge id)imageBuffer;
+    @synchronized(self){
+        NSUInteger insertionIndex = self.presentationTimes.count + 1;
+        
+        [self.outputFrames addObject:imageBufferObject];
+        [self.presentationTimes addObject:[NSNumber numberWithInteger:insertionIndex]];
+        
+    }
+}
+
+
 @end

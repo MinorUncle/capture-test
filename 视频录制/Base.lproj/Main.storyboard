@@ -3,7 +3,7 @@
     <dependencies>
         <deployment identifier="iOS"/>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="9529"/>
-        <capability name="Constraints to layout margins" minToolsVersion="6.0"/>
+        <capability name="Constraints with non-1.0 multipliers" minToolsVersion="5.1"/>
     </dependencies>
     <scenes>
         <!--View Controller-->
@@ -96,24 +96,24 @@
                                     <action selector="toggleButtonClick:" destination="vXZ-lx-hvc" eventType="touchUpInside" id="zUC-Xd-nKk"/>
                                 </connections>
                             </button>
-                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="fWY-jo-96Y" customClass="OpenGLView20">
+                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="fWY-jo-96Y">
                                 <rect key="frame" x="0.0" y="0.0" width="240" height="128"/>
-                                <color key="backgroundColor" cocoaTouchSystemColor="darkTextColor"/>
+                                <color key="backgroundColor" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="calibratedRGB"/>
                             </view>
                         </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
                         <constraints>
                             <constraint firstAttribute="trailing" secondItem="I0z-vf-Z8D" secondAttribute="trailing" id="7tH-dq-TbS"/>
                             <constraint firstItem="I0z-vf-Z8D" firstAttribute="leading" secondItem="kh9-bI-dsS" secondAttribute="leading" id="7zZ-mz-MKV"/>
+                            <constraint firstItem="fWY-jo-96Y" firstAttribute="top" secondItem="7Dz-dC-KaL" secondAttribute="bottom" id="8qL-29-6AB"/>
                             <constraint firstItem="7Dz-dC-KaL" firstAttribute="centerY" secondItem="bqV-qs-irA" secondAttribute="centerY" id="9dH-2T-HfO"/>
                             <constraint firstItem="fWY-jo-96Y" firstAttribute="top" secondItem="7Dz-dC-KaL" secondAttribute="bottom" id="9iA-vZ-Bvn"/>
+                            <constraint firstItem="fWY-jo-96Y" firstAttribute="height" secondItem="kh9-bI-dsS" secondAttribute="height" multiplier="0.5" id="Al2-UA-PQo"/>
                             <constraint firstItem="I0z-vf-Z8D" firstAttribute="top" secondItem="kh9-bI-dsS" secondAttribute="top" id="JPQ-ks-zft"/>
                             <constraint firstItem="7Dz-dC-KaL" firstAttribute="top" secondItem="I0z-vf-Z8D" secondAttribute="bottom" constant="5" id="QFc-ge-zb0"/>
                             <constraint firstItem="fWY-jo-96Y" firstAttribute="leading" secondItem="kh9-bI-dsS" secondAttribute="leading" id="SM7-1v-g1B"/>
                             <constraint firstItem="2fi-mo-0CV" firstAttribute="top" secondItem="fWY-jo-96Y" secondAttribute="bottom" id="ilG-8D-qBD"/>
                             <constraint firstItem="fWY-jo-96Y" firstAttribute="width" secondItem="I0z-vf-Z8D" secondAttribute="width" id="kGn-dq-hbr"/>
-                            <constraint firstAttribute="leadingMargin" secondItem="fWY-jo-96Y" secondAttribute="leading" id="lhh-yC-mE5"/>
-                            <constraint firstItem="2fi-mo-0CV" firstAttribute="top" secondItem="7Dz-dC-KaL" secondAttribute="bottom" constant="200" id="sCJ-yT-8zQ"/>
                             <constraint firstAttribute="centerX" secondItem="7Dz-dC-KaL" secondAttribute="centerX" id="tt3-XU-xPm"/>
                             <constraint firstItem="7Dz-dC-KaL" firstAttribute="leading" secondItem="bqV-qs-irA" secondAttribute="trailing" constant="45" id="xQ6-m3-me1"/>
                         </constraints>
@@ -132,12 +132,12 @@
                                 <exclude reference="QFc-ge-zb0"/>
                                 <exclude reference="tt3-XU-xPm"/>
                                 <exclude reference="xQ6-m3-me1"/>
+                                <exclude reference="8qL-29-6AB"/>
                                 <exclude reference="9iA-vZ-Bvn"/>
+                                <exclude reference="Al2-UA-PQo"/>
                                 <exclude reference="SM7-1v-g1B"/>
                                 <exclude reference="kGn-dq-hbr"/>
-                                <exclude reference="lhh-yC-mE5"/>
                                 <exclude reference="ilG-8D-qBD"/>
-                                <exclude reference="sCJ-yT-8zQ"/>
                             </mask>
                         </variation>
                         <variation key="heightClass=regular-widthClass=compact">
@@ -155,12 +155,12 @@
                                 <include reference="QFc-ge-zb0"/>
                                 <include reference="tt3-XU-xPm"/>
                                 <include reference="xQ6-m3-me1"/>
+                                <include reference="8qL-29-6AB"/>
                                 <include reference="9iA-vZ-Bvn"/>
+                                <include reference="Al2-UA-PQo"/>
                                 <include reference="SM7-1v-g1B"/>
                                 <include reference="kGn-dq-hbr"/>
-                                <exclude reference="lhh-yC-mE5"/>
                                 <include reference="ilG-8D-qBD"/>
-                                <include reference="sCJ-yT-8zQ"/>
                             </mask>
                         </variation>
                     </view>
