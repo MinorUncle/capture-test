@@ -11,6 +11,8 @@
 #import <AVFoundation/AVFoundation.h>
 #import <AssetsLibrary/AssetsLibrary.h>
 #import <VideoToolbox/VideoToolbox.h>
+#import "H264Decoder.h"
+#import "H264Encoder.h"
 #define fps 30
 typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 
@@ -49,8 +51,9 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 @property NSMutableArray *presentationTimes;
 @property dispatch_semaphore_t bufferSemaphore;
 @property (weak, nonatomic) IBOutlet UILabel *fpsLab;
-@property(nonatomic)VTDecompressionSessionRef decompressionSession;
-@property(nonatomic)VTCompressionSessionRef compressionSession;
+
+//@property (nonatomic, assign) int spsSize;
+//@property (nonatomic, assign) int ppsSize;
 
 
 
@@ -61,83 +64,22 @@ ViewController * localVC;
 NSData * sps;
 NSData * pps;
 @implementation ViewController
+
 //编码
-void encodeOutputCallback(void *  outputCallbackRefCon,void *  sourceFrameRefCon,OSStatus status,VTEncodeInfoFlags infoFlags,
-                          CMSampleBufferRef sampleBuffer ){
-    NSLog(@"didCompressH264 called with status %d infoFlags %d", (int)status, (int)infoFlags);
-    if (status != 0) return;
-    
-    if (!CMSampleBufferDataIsReady(sampleBuffer))
-    {
-        NSLog(@"didCompressH264 data is not ready ");
-        return;
-    }
-    
-    bool keyframe = !CFDictionaryContainsKey( (CFArrayGetValueAtIndex(CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, true), 0)), kCMSampleAttachmentKey_NotSync);
-    
-    if (keyframe)
-    {
-        CMFormatDescriptionRef format = CMSampleBufferGetFormatDescription(sampleBuffer);
-        
-        size_t sparameterSetSize, sparameterSetCount;
-        const uint8_t *sparameterSet;
-        OSStatus statusCode = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(format, 0, &sparameterSet, &sparameterSetSize, &sparameterSetCount, 0 );
-        if (statusCode == noErr)
-        {
-            size_t pparameterSetSize, pparameterSetCount;
-            const uint8_t *pparameterSet;
-            OSStatus statusCode = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(format, 1, &pparameterSet, &pparameterSetSize, &pparameterSetCount, 0 );
-            if (statusCode == noErr)
-            {
-                sps = [NSData dataWithBytes:sparameterSet length:sparameterSetSize];
-                pps = [NSData dataWithBytes:pparameterSet length:pparameterSetSize];
-                
-            }
-        }
-    }
-    
-    CMBlockBufferRef dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer);
-    size_t length, totalLength;
-    char *dataPointer;
-    OSStatus statusCodeRet = CMBlockBufferGetDataPointer(dataBuffer, 0, &length, &totalLength, &dataPointer);
-    if (statusCodeRet == noErr) {
-        
-        size_t bufferOffset = 0;
-        static const int AVCCHeaderLength = 4;
-        while (bufferOffset < totalLength - AVCCHeaderLength) {
-            
-            // Read the NAL unit length
-            uint32_t NALUnitLength = 0;
-            memcpy(&NALUnitLength, dataPointer + bufferOffset, AVCCHeaderLength);
-            
-            NALUnitLength = CFSwapInt32BigToHost(NALUnitLength);
-            
-            NSData* data = [[NSData alloc] initWithBytes:(dataPointer + bufferOffset + AVCCHeaderLength) length:NALUnitLength];
-           
-            
-            bufferOffset += AVCCHeaderLength + NALUnitLength;
-        }
-        
-    }
 
-    
-}
+
 //解码
-void decodeOutputCallback(
-                          void * decompressionOutputRefCon,
-                          void * sourceFrameRefCon,
-                          OSStatus status,
-                          VTDecodeInfoFlags infoFlags,
-                          CVImageBufferRef imageBuffer,
-                          CMTime presentationTimeStamp,
-                          CMTime presentationDuration ){
 
-    [localVC startDecodeData];
-    [localVC getDecodeImageData:imageBuffer];
-    NSLog(@"解码！！status:%d",(int)status);
-    
+-(void)relaseData:(uint8_t*) tmpData{
+    if (NULL != tmpData)
+    {
+        free (tmpData);
+        tmpData = NULL;
+    }
 }
+
 #pragma mark - 控制器视图方法
+
 -(void)timeFire:(NSTimer*)time{
     self.fpsLab.text = [NSString stringWithFormat:@"fps:%ld",frameCount];
     frameCount = 0;
@@ -156,49 +98,6 @@ void decodeOutputCallback(
     self.bufferSemaphore = dispatch_semaphore_create(0);
     
     
-}
-
--(void)creatCompression{
-    OSStatus t = VTCompressionSessionCreate(
-                                            NULL,
-                                            640,
-                                            480,
-                                            kCMVideoCodecType_H264,
-                                            NULL,
-                                            NULL,
-                                            NULL,
-                                            encodeOutputCallback,
-                                            &_decompressionSession,
-                                            &_compressionSession);
-    NSLog(@"VTCompressionSessionCreate status:%d",(int)t);
-    VTSessionSetProperty(_compressionSession, kVTCompressionPropertyKey_RealTime, kCFBooleanTrue);
-
-
-}
--(void)creatDecompression:(CMVideoFormatDescriptionRef)sourceFrameRefCon{
-    VTDecompressionOutputCallbackRecord recode;
-    recode.decompressionOutputCallback = decodeOutputCallback;
-//    recode.decompressionOutputRefCon =  self.compressionSession;
-
-//    CFDictionaryRef attrs = NULL;
-//    const void *keys[] = { kCVPixelBufferPixelFormatTypeKey };
-//    //      kCVPixelFormatType_420YpCbCr8Planar is YUV420
-//    //      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange is NV12
-//    uint32_t v = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
-//    const void *values[] = { CFNumberCreate(NULL, kCFNumberSInt32Type, &v) };
-//    attrs = CFDictionaryCreate(NULL, keys, values, 1, NULL, NULL);
-    
-    CFDictionaryRef dic = CMFormatDescriptionGetExtensions(sourceFrameRefCon);
-    CMMediaType type = CMFormatDescriptionGetMediaType(sourceFrameRefCon);
-    CMMediaType subType = CMFormatDescriptionGetMediaSubType(sourceFrameRefCon);
-//    NSDictionary *destinationImageBufferAttributes = [NSDictionary dictionaryWithObjectsAndKeys:
-//                                                      [NSNumber numberWithBool:YES],
-//                                                      (id)kCVPixelBufferOpenGLESCompatibilityKey,
-//                                                      nil];
-
-    OSStatus t = VTDecompressionSessionCreate(NULL, sourceFrameRefCon, NULL, NULL, &recode, &_decompressionSession);
-   
-
 }
 
 -(void)viewWillAppear:(BOOL)animated{
@@ -258,9 +157,6 @@ void decodeOutputCallback(
     if ([_captureSession canAddOutput:_captureDataOutput]) {
         [_captureSession addOutput:_captureDataOutput];
     }
-       CFDictionaryRef supperDic;
-    VTSessionCopySupportedPropertyDictionary(_compressionSession,&supperDic);
-    
     
     //创建视频预览层，用于实时展示摄像头状态
     _captureVideoPreviewLayer=[[AVCaptureVideoPreviewLayer alloc]initWithSession:self.captureSession];
@@ -277,10 +173,7 @@ void decodeOutputCallback(
     _enableRotation=YES;
     [self addNotificationToCaptureDevice:self.captureDevice];
     [self addGenstureRecognizer];
-    
-    
-    
-    [self creatCompression];
+   
 }
 
 -(void)viewDidAppear:(BOOL)animated{
@@ -451,26 +344,24 @@ bool i = false;
 //    Boolean flip = CVImageBufferIsFlipped(imgRef);
 //    [self startDecodeData];
 //    [self getDecodeImageData:imgRef];
-    CMVideoFormatDescriptionRef formatDesc;
-    CMVideoFormatDescriptionCreateForImageBuffer(NULL, imgRef, &formatDesc);
-
-    
-    if (_decompressionSession == nil) {
-        [self creatDecompression:formatDesc];
-    }
-    OSType t = CVPixelBufferGetPixelFormatType(imgRef);
-    
-    CMTime duration = CMTimeMake(1, fps);
-    CMTime timeStamp = CMTimeMake(totalCount, fps);
-    CMVideoFormatDescriptionCreateForImageBuffer(NULL, imgRef, &formatDesc);
-    OSStatus st = VTCompressionSessionEncodeFrame(
-                                    _compressionSession,
-                                    imgRef,
-                                    timeStamp,
-                                    duration, // may be kCMTimeInvalid
-                                    NULL,
-                                    &formatDesc,
-                                    NULL );
+//    CMVideoFormatDescriptionRef formatDesc;
+//    CMVideoFormatDescriptionCreateForImageBuffer(NULL, imgRef, &formatDesc);
+//
+//    
+//
+//    OSType t = CVPixelBufferGetPixelFormatType(imgRef);
+//    
+//    CMTime duration = CMTimeMake(1, fps);
+//    CMTime timeStamp = CMTimeMake(totalCount, fps);
+//    CMVideoFormatDescriptionCreateForImageBuffer(NULL, imgRef, &formatDesc);
+//    OSStatus st = VTCompressionSessionEncodeFrame(
+//                                    _compressionSession,
+//                                    imgRef,
+//                                    timeStamp,
+//                                    duration, // may be kCMTimeInvalid
+//                                    NULL,
+//                                    &formatDesc,
+//                                    NULL );
 //
 //    CMVideoFormatDescriptionRef formatDesc;
 //    CMVideoFormatDescriptionCreateForImageBuffer(NULL, imgRef, &formatDesc);
@@ -964,7 +855,10 @@ bool i = false;
 
     
 }
-//-(void) encode:()
+int findHeadindex(char* str,int lenth){
+    
+    return 0;
+}
 
 
 @end

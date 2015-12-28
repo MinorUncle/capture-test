@@ -17,6 +17,8 @@
 		C548A79F1C2BF8C8001CDB85 /* AAPLEAGLLayer.m in Sources */ = {isa = PBXBuildFile; fileRef = C548A79C1C2BF8C8001CDB85 /* AAPLEAGLLayer.m */; };
 		C548A7A01C2BF8C8001CDB85 /* Shader.fsh in Resources */ = {isa = PBXBuildFile; fileRef = C548A79D1C2BF8C8001CDB85 /* Shader.fsh */; };
 		C548A7A11C2BF8C8001CDB85 /* Shader.vsh in Resources */ = {isa = PBXBuildFile; fileRef = C548A79E1C2BF8C8001CDB85 /* Shader.vsh */; };
+		C57D25D11C313234003FE071 /* H264Decoder.m in Sources */ = {isa = PBXBuildFile; fileRef = C57D25D01C313234003FE071 /* H264Decoder.m */; };
+		C57D25D41C313246003FE071 /* H264Encoder.m in Sources */ = {isa = PBXBuildFile; fileRef = C57D25D31C313246003FE071 /* H264Encoder.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -47,6 +49,10 @@
 		C548A79C1C2BF8C8001CDB85 /* AAPLEAGLLayer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AAPLEAGLLayer.m; sourceTree = "<group>"; };
 		C548A79D1C2BF8C8001CDB85 /* Shader.fsh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.glsl; path = Shader.fsh; sourceTree = "<group>"; };
 		C548A79E1C2BF8C8001CDB85 /* Shader.vsh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.glsl; path = Shader.vsh; sourceTree = "<group>"; };
+		C57D25CF1C313234003FE071 /* H264Decoder.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = H264Decoder.h; sourceTree = "<group>"; };
+		C57D25D01C313234003FE071 /* H264Decoder.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = H264Decoder.m; sourceTree = "<group>"; };
+		C57D25D21C313246003FE071 /* H264Encoder.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = H264Encoder.h; sourceTree = "<group>"; };
+		C57D25D31C313246003FE071 /* H264Encoder.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = H264Encoder.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -97,6 +103,10 @@
 				AEF9852B1B959CF4000E6339 /* Images.xcassets */,
 				AEF9852D1B959CF4000E6339 /* LaunchScreen.xib */,
 				AEF9851E1B959CF4000E6339 /* Supporting Files */,
+				C57D25CF1C313234003FE071 /* H264Decoder.h */,
+				C57D25D01C313234003FE071 /* H264Decoder.m */,
+				C57D25D21C313246003FE071 /* H264Encoder.h */,
+				C57D25D31C313246003FE071 /* H264Encoder.m */,
 			);
 			path = "视频录制";
 			sourceTree = "<group>";
@@ -241,10 +251,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C57D25D41C313246003FE071 /* H264Encoder.m in Sources */,
 				AEF985271B959CF4000E6339 /* ViewController.m in Sources */,
 				AEF985241B959CF4000E6339 /* AppDelegate.m in Sources */,
 				AEF985211B959CF4000E6339 /* main.m in Sources */,
 				C548A79F1C2BF8C8001CDB85 /* AAPLEAGLLayer.m in Sources */,
+				C57D25D11C313234003FE071 /* H264Decoder.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -372,6 +384,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_FILE = "视频录制/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tong;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -384,6 +397,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_FILE = "视频录制/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tong;
 				PRODUCT_NAME = "$(TARGET_NAME)";
