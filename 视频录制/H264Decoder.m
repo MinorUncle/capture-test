@@ -8,7 +8,9 @@
 
 #import "H264Decoder.h"
 @interface H264Decoder()
-{}
+{
+    dispatch_queue_t _decodeQueue;
+}
 @property(nonatomic)VTDecompressionSessionRef decompressionSession;
 @property (nonatomic, assign) CMVideoFormatDescriptionRef formatDesc;
 
@@ -20,6 +22,7 @@ H264Decoder *decoder;
     self = [super init];
     if (self) {
         decoder = self;
+        _decodeQueue = dispatch_queue_create("decodeQueue", DISPATCH_QUEUE_SERIAL);
     }
     return self;
 }
@@ -38,9 +41,12 @@ H264Decoder *decoder;
     //使用UIImageView播放时可以设置这个
     //    NSDictionary *destinationImageBufferAttributes =[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithBool:NO],(id)kCVPixelBufferOpenGLESCompatibilityKey,[NSNumber numberWithInt:kCVPixelFormatType_32BGRA],(id)kCVPixelBufferPixelFormatTypeKey,nil];
     
-    OSStatus status =  VTDecompressionSessionCreate(NULL, _formatDesc, NULL,
+    OSStatus status =  VTDecompressionSessionCreate(NULL,
+                                                    _formatDesc,
+                                                    NULL,
                                                     (__bridge CFDictionaryRef)(destinationImageBufferAttributes),
-                                                    &callBackRecord, &_decompressionSession);
+                                                    &callBackRecord,
+                                                    &_decompressionSession);
     NSLog(@"Video Decompression Session Create: \t %@", (status == noErr) ? @"successful!" : @"failed...");
 }
 
@@ -60,14 +66,10 @@ void decodeOutputCallback(
         return;
     }
     
-    
-    [decoder.delegate startDecodeData];
-    [decoder.delegate getDecodeImageData:imageBuffer];
+    [decoder.delegate decodeCompleteImageData:imageBuffer];
     NSLog(@"解码！！status:%d",(int)status);
-    
 }
-
--(void) deCodeFrame:(uint8_t *)frame withSize:(uint32_t)frameSize
+-(void)decodeBuffer:(uint8_t*)frame withLenth:(uint32_t)frameSize;
 {
     NSLog(@"decodeFrame:%@",[NSThread currentThread]);
     
@@ -123,7 +125,7 @@ void decodeOutputCallback(
                 break;
             }
         }
-        
+    
         sps = malloc(_spsSize - 4);
         pps = malloc(_ppsSize - 4);
         
@@ -148,8 +150,6 @@ void decodeOutputCallback(
     
     if(nalu_type == 5)   //i帧
     {
-        NSData* temdata = [NSData dataWithBytes:frame length:frameSize];
-        NSLog(@"data:%@",temdata);
         int offset = _spsSize + _ppsSize;
         blockLength = frameSize - offset;
         data = malloc(blockLength);
@@ -157,8 +157,6 @@ void decodeOutputCallback(
         
         uint32_t dataLength32 = htonl (blockLength - 4);
         memcpy (data, &dataLength32, sizeof (uint32_t));
-        temdata = [NSData dataWithBytes:data length:blockLength];
-        NSLog(@"data:%@",temdata);
         
         status = CMBlockBufferCreateWithMemoryBlock(NULL, data,
                                                     blockLength,
@@ -208,6 +206,7 @@ void decodeOutputCallback(
         CFDictionarySetValue(dict, kCMSampleAttachmentKey_DisplayImmediately, kCFBooleanTrue);
         
         [self render:sampleBuffer];
+        CFRelease(sampleBuffer);
     }
     
     
@@ -234,20 +233,7 @@ void decodeOutputCallback(
 {
     VTDecodeFrameFlags flags = kVTDecodeFrame_EnableAsynchronousDecompression;
     VTDecodeInfoFlags flagOut;
-    CFArrayRef re = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, YES);
-    
-    
-    
-    CFArrayRef arry = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, YES);
-    
-    CFDictionaryRef dic = CMFormatDescriptionGetExtensions(_formatDesc);
-    CMMediaType type = CMFormatDescriptionGetMediaType(_formatDesc);
-    CMMediaType subType = CMFormatDescriptionGetMediaSubType(_formatDesc);
-    
-    VTDecompressionSessionDecodeFrame(_decompressionSession, sampleBuffer, flags,
-                                      &sampleBuffer, &flagOut);
-    
-    CFRelease(sampleBuffer);
+    VTDecompressionSessionDecodeFrame(_decompressionSession, sampleBuffer, flags,&sampleBuffer, &flagOut);
 }
 
 

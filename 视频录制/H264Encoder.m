@@ -13,7 +13,6 @@
 
 }
 @property(nonatomic)VTCompressionSessionRef enCodeSession;
-@property (nonatomic, assign) CMVideoFormatDescriptionRef formatDesc;
 @end
 
 @implementation H264Encoder
@@ -23,6 +22,7 @@ H264Encoder* encoder ;
     self = [super init];
     if (self) {
         encoder = self;
+        [self creatEnCodeSession];
     }
     return self;
 }
@@ -32,9 +32,6 @@ H264Encoder* encoder ;
 //编码
 -(void)encodeSampleBuffer:(CMSampleBufferRef)sampleBuffer
 {
-    if (_enCodeSession == nil) {
-        [self creatEnCodeSession];
-    }
     CVImageBufferRef imgRef = CMSampleBufferGetImageBuffer(sampleBuffer);
     OSStatus status = VTCompressionSessionEncodeFrame(
                                                   _enCodeSession,
@@ -42,7 +39,7 @@ H264Encoder* encoder ;
                                                   kCMTimeInvalid,
                                                   kCMTimeInvalid, // may be kCMTimeInvalid
                                                   NULL,
-                                                  &_formatDesc,
+                                                  NULL,
                                                   NULL );
     if (status != 0) {
         NSLog(@"encodeSampleBuffer error:%d",status);
@@ -132,7 +129,7 @@ void encodeOutputCallback(void *  outputCallbackRefCon,void *  sourceFrameRefCon
             uint8_t* frame = malloc(temData.length) ;
             
             [temData getBytes:frame length:temData.length];
-            [encoder.deleagte enCodeCompleteBuffer:frame withLenth:temData.length];
+            [encoder.deleagte encodeCompleteBuffer:frame withLenth:temData.length];
             
             data = [[NSMutableData alloc]init];
             bufferOffset += AVCCHeaderLength + NALUnitLength;

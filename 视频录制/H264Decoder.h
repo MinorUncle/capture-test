@@ -9,12 +9,11 @@
 #import <Foundation/Foundation.h>
 #import <VideoToolbox/VideoToolbox.h>
 @protocol H264DecoderDelegate
--(void)startDecodeData;
--(void)getDecodeImageData:(CVImageBufferRef)imageBuffer;
+-(void)decodeCompleteImageData:(CVImageBufferRef)imageBuffer;
 @end
 
 @interface H264Decoder : NSObject
 @property(nonatomic,weak)id<H264DecoderDelegate> delegate;
--(void)deCodeCompleteBuffer:(uint8_t*)buffer withLenth:(long)totalLenth;
+-(void)decodeBuffer:(uint8_t*)buffer withLenth:(uint32_t)totalLenth;
 
 @end

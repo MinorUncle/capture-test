@@ -16,7 +16,7 @@
 #define fps 30
 typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 
-@interface ViewController ()<AVCaptureFileOutputRecordingDelegate,AVCaptureVideoDataOutputSampleBufferDelegate>//视频文件输出代理
+@interface ViewController ()<AVCaptureFileOutputRecordingDelegate,AVCaptureVideoDataOutputSampleBufferDelegate,H264DecoderDelegate,H264EncoderDelegate>//视频文件输出代理
 {
     long frameCount;///每一重计，计算帧率
     long totalCount;
@@ -51,6 +51,8 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 @property NSMutableArray *presentationTimes;
 @property dispatch_semaphore_t bufferSemaphore;
 @property (weak, nonatomic) IBOutlet UILabel *fpsLab;
+@property(nonatomic)H264Decoder* decoder;
+@property(nonatomic)H264Encoder* encoder;
 
 //@property (nonatomic, assign) int spsSize;
 //@property (nonatomic, assign) int ppsSize;
@@ -60,23 +62,10 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 
 @end
 
-ViewController * localVC;
 NSData * sps;
 NSData * pps;
 @implementation ViewController
 
-//编码
-
-
-//解码
-
--(void)relaseData:(uint8_t*) tmpData{
-    if (NULL != tmpData)
-    {
-        free (tmpData);
-        tmpData = NULL;
-    }
-}
 
 #pragma mark - 控制器视图方法
 
@@ -86,7 +75,10 @@ NSData * pps;
 }
 - (void)viewDidLoad {
     [super viewDidLoad];
-    localVC = self;
+    _encoder = [[H264Encoder alloc]init];
+    _encoder.deleagte = self;
+    _decoder = [[H264Decoder alloc]init];
+    _decoder.delegate = self;
     _timer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(timeFire:) userInfo:nil repeats:YES];
     
     self.outputFrames = [NSMutableArray new];
@@ -97,7 +89,6 @@ NSData * pps;
     [self.displayLink setPaused:YES];
     self.bufferSemaphore = dispatch_semaphore_create(0);
     
-    
 }
 
 -(void)viewWillAppear:(BOOL)animated{
@@ -107,7 +98,6 @@ NSData * pps;
     if ([_captureSession canSetSessionPreset:AVCaptureSessionPreset640x480]) {//设置分辨率
         _captureSession.sessionPreset=AVCaptureSessionPreset640x480;
     }
-    [self initVideoAudioWriter];
     //获得输入设备
     self.captureDevice=[self getCameraDeviceWithPosition:AVCaptureDevicePositionBack];//取得后置摄像头
     if (!self.captureDevice) {
@@ -143,16 +133,10 @@ NSData * pps;
     if ([_captureSession canAddInput:_captureDeviceInput]) {
         [_captureSession addInput:_captureDeviceInput];
         [_captureSession addInput:audioCaptureDeviceInput];
-//        AVCaptureConnection *captureConnection=[_captureMovieFileOutput connectionWithMediaType:AVMediaTypeVideo];
-//        if ([captureConnection isVideoStabilizationSupported ]) {
-//            captureConnection.preferredVideoStabilizationMode=AVCaptureVideoStabilizationModeAuto;
-//        }
+
     }
     
-    //将设备输出添加到会话中
-//    if ([_captureSession canAddOutput:_captureMovieFileOutput]) {
-//        [_captureSession addOutput:_captureMovieFileOutput];
-//    }
+
     
     if ([_captureSession canAddOutput:_captureDataOutput]) {
         [_captureSession addOutput:_captureDataOutput];
@@ -231,13 +215,12 @@ NSData * pps;
         captureConnection.videoOrientation=[self.captureVideoPreviewLayer connection].videoOrientation;
         NSString *outputFielPath=[NSTemporaryDirectory() stringByAppendingString:@"myMovie.mov"];
         NSLog(@"save path is :%@",outputFielPath);
-        NSURL *fileUrl=[NSURL fileURLWithPath:outputFielPath];
-//        [self.captureMovieFileOutput startRecordingToOutputFileURL:fileUrl recordingDelegate:self];
-        NSArray* a = self.captureDataOutput.availableVideoCodecTypes;
-        NSArray* b = self.captureDataOutput.availableVideoCVPixelFormatTypes;
-        NSLog(@"%@", a);
-        NSLog(@"%@", b);
-        self.captureDataOutput.videoSettings = @{(id)kCVPixelBufferPixelFormatTypeKey:b[2]};
+////        [self.captureMovieFileOutput startRecordingToOutputFileURL:fileUrl recordingDelegate:self];
+//        NSArray* a = self.captureDataOutput.availableVideoCodecTypes;
+//        NSArray* b = self.captureDataOutput.availableVideoCVPixelFormatTypes;
+//        NSLog(@"%@", a);
+//        NSLog(@"%@", b);
+//        self.captureDataOutput.videoSettings = @{(id)kCVPixelBufferPixelFormatTypeKey:b[2]};
         [self.captureDataOutput setSampleBufferDelegate:self queue:dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)];
     }
     else{
@@ -327,267 +310,12 @@ NSData * pps;
 bool i = false;
 
 -(void)captureOutput:(AVCaptureOutput *)captureOutput didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection {
-
-//    CMSampleTimingInfo info;
-//    CMSampleTimingInfo infoArry[7];
-//    
-//    CMItemCount count;
-//    OSStatus status =  CMSampleBufferGetSampleTimingInfo(sampleBuffer, 0, &info);
-//    OSStatus status1 = CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, 1, infoArry, &count);
-//    CMItemCount c =CMSampleBufferGetNumSamples(sampleBuffer);
     frameCount++;
-    totalCount++;
-    CVImageBufferRef imgRef = CMSampleBufferGetImageBuffer(sampleBuffer);
-//    CMItemCount count = CMSampleBufferGetNumSamples(sampleBuffer);
-//    CFDictionaryRef dicRef = CVBufferGetAttachments(imgRef,kCVAttachmentMode_ShouldPropagate);
-//      CFArrayRef arryRef =  CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, YES);
-//    Boolean flip = CVImageBufferIsFlipped(imgRef);
-//    [self startDecodeData];
-//    [self getDecodeImageData:imgRef];
-//    CMVideoFormatDescriptionRef formatDesc;
-//    CMVideoFormatDescriptionCreateForImageBuffer(NULL, imgRef, &formatDesc);
-//
-//    
-//
-//    OSType t = CVPixelBufferGetPixelFormatType(imgRef);
-//    
-//    CMTime duration = CMTimeMake(1, fps);
-//    CMTime timeStamp = CMTimeMake(totalCount, fps);
-//    CMVideoFormatDescriptionCreateForImageBuffer(NULL, imgRef, &formatDesc);
-//    OSStatus st = VTCompressionSessionEncodeFrame(
-//                                    _compressionSession,
-//                                    imgRef,
-//                                    timeStamp,
-//                                    duration, // may be kCMTimeInvalid
-//                                    NULL,
-//                                    &formatDesc,
-//                                    NULL );
-//
-//    CMVideoFormatDescriptionRef formatDesc;
-//    CMVideoFormatDescriptionCreateForImageBuffer(NULL, imgRef, &formatDesc);
-//    
-//    CFArrayRef arry = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, YES);
-//    
-//    CFDictionaryRef dic = CMFormatDescriptionGetExtensions(formatDesc);
-//    CMMediaType type = CMFormatDescriptionGetMediaType(formatDesc);
-//    CMMediaType subType = CMFormatDescriptionGetMediaSubType(formatDesc);
-//
-//
-//    
-//    CMTime durationTime = CMSampleBufferGetDuration(sampleBuffer);
-//    CMTime presentTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
-//    CMTime decodeTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
-//    [self printCMTime:durationTime flg:@"duration"];
-//    [self printCMTime:decodeTime flg:@"decode"];
-//    [self printCMTime:presentTime  flg:@"present"];
-    
-//    Timing information. You get accurate timestamps for both the original presentation time and the decode time using CMSampleBufferGetPresentationTimeStamp and CMSampleBufferGetDecodeTimeStamp respectively.
-//        Format information. The format information is encapsulated in a CMFormatDescription object (see CMFormatDescriptionRef). From the format description, you can get for example the pixel type and video dimensions using CMVideoFormatDescriptionGetCodecType and CMVideoFormatDescriptionGetDimensions respectively.
-//            Metadata. Metadata are stored in a dictionary as an attachment. You use CMGetAttachment to retrieve the dictionary:
-//            CMSampleBufferRef sampleBuffer = Get a sample buffer;
-//    CFDictionaryRef metadataDictionary =
-//    CMGetAttachment(sampleBuffer, CFSTR("MetadataDictionary", NULL);
-//                    if (metadataDictionary) {
-//                        // Do something with the metadata.
-//                    }
-    
-//
-//    CVImageBufferRef  imgData = CMSampleBufferGetImageBuffer(sampleBuffer);
-//    
-//    
-//    CVPixelBufferLockBaseAddress(imgData, 0);
-//    void* p = CVPixelBufferGetBaseAddress(imgData);
-//    size_t height = CVPixelBufferGetHeight(imgData);
-//    size_t width = CVPixelBufferGetWidth(imgData);
-//    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imgData);
-//    
-//    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-//    if (false) {
-//        i = true;
-//        return;
-//    }
-//    CGImageRef img = CGImageCreate(width, height, 8, 32, bytesPerRow, colorSpace, kCGImageAlphaNoneSkipFirst|kCGBitmapByteOrder32Little, p, NULL, true, kCGRenderingIntentDefault);
-//    
-//    dispatch_async(dispatch_get_main_queue(), ^{
-//        self.playView.backgroundColor = [UIColor colorWithPatternImage:[UIImage imageWithCGImage:img]];
-//        CGImageRelease(img);
-//    });
-//    CGColorSpaceRelease(colorSpace);
+    [_encoder encodeSampleBuffer:sampleBuffer];
 
-
-
-//    if (status == noErr) {
-//        [self printCMTime:info.duration flg:@"duration"];
-//        [self printCMTime:info.decodeTimeStamp flg:@"decode"];
-//        [self printCMTime:info.presentationTimeStamp  flg:@"present"];
-//    }
-//    if (status1 == noErr) {
-//        for (int i = 0; i<7; i++) {
-//            [self printCMTime:infoArry[i].duration flg:@"duration"];
-//            [self printCMTime:infoArry[i].decodeTimeStamp flg:@"decode"];
-//            [self printCMTime:infoArry[i].presentationTimeStamp  flg:@"present"];
-//
-//        }
-//    }
-
-
-    
-//    CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, <#CMItemCount timingArrayEntries#>, <#CMSampleTimingInfo * _Nullable timingArrayOut#>, <#CMItemCount * _Nullable timingArrayEntriesNeededOut#>)
-    //CVPixelBufferRef pixelBuffer = (CVPixelBufferRef)CMSampleBufferGetImageBuffer(sampleBuffer);
-
-//    static int frame = 0;
-//    CMTime lastSampleTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
-//    if( frame == 0 && _videoWriter.status != AVAssetWriterStatusWriting  ){
-//        [_videoWriter startWriting];
-//        [_videoWriter startSessionAtSourceTime:lastSampleTime];
-//    }
-//    if (captureOutput == _captureDataOutput){
-//        if( _videoWriter.status > AVAssetWriterStatusWriting ){
-//            NSLog(@"Warning: writer status is %ld", _videoWriter.status);
-//            if( _videoWriter.status == AVAssetWriterStatusFailed )
-//                NSLog(@"Error: %@", _videoWriter.error);
-//            return;
-//        }
-//        if ([_videoWriterInput isReadyForMoreMediaData]){
-//            if( ![_videoWriterInput appendSampleBuffer:sampleBuffer] ){
-//                NSLog(@"Unable to write to video input");
-//            }else{
-//                NSLog(@"already write vidio");
-//            }
-//        }
-//    }
-    
-
-//else if (captureOutput == audioOutput)
-//
-//{
-//    
-//    if( videoWriter.status > AVAssetWriterStatusWriting ) {
-//        NSLog(@"Warning: writer status is %d", videoWriter.status);
-//        if( videoWriter.status == AVAssetWriterStatusFailed )
-//            NSLog(@"Error: %@", videoWriter.error);
-//        return;
-//    }
-//    if ([audioWriterInput isReadyForMoreMediaData])
-//        if( ![audioWriterInput appendSampleBuffer:sampleBuffer] )
-//            NSLog(@"Unable to write to audio input");
-//        else
-//            NSLog(@"already write audio");
-//}
-//if (frame == FrameCount)
-//{
-//    [self closeVideoWriter];
-//}
-//frame ++;
 }
 
--(void) initVideoAudioWriter
 
-{
-    CGSize size = CGSizeMake(480, 320);
-    NSString *betaCompressionDirectory = [NSHomeDirectory()stringByAppendingPathComponent:@"Documents/Movie.mp4"];
-    NSError *error = nil;
-    unlink([betaCompressionDirectory UTF8String]);
-    //----initialize compression engine
-    self.videoWriter = [[AVAssetWriter alloc] initWithURL:[NSURL fileURLWithPath:betaCompressionDirectory]
-                        
-                                                 fileType:AVFileTypeQuickTimeMovie
-                        
-                                                    error:&error];
-    
-    NSParameterAssert(_videoWriter);
-    if(error)NSLog(@"error = %@", [error localizedDescription]);
-    NSDictionary *videoCompressionProps = [NSDictionary dictionaryWithObjectsAndKeys:
-                                           [NSNumber numberWithDouble:128.0*1024.0],AVVideoAverageBitRateKey,
-                                           nil ];
-    NSDictionary *videoSettings = [NSDictionary dictionaryWithObjectsAndKeys:AVVideoCodecH264, AVVideoCodecKey,
-                                   [NSNumber numberWithInt:size.width], AVVideoWidthKey,
-                                   [NSNumber numberWithInt:size.height],AVVideoHeightKey,videoCompressionProps, AVVideoCompressionPropertiesKey, nil];
-    
-    self.videoWriterInput = [AVAssetWriterInput assetWriterInputWithMediaType:AVMediaTypeVideo outputSettings:videoSettings];
-    NSParameterAssert(_videoWriterInput);
-    
-    
-    
-    _videoWriterInput.expectsMediaDataInRealTime = YES;
-    
-    
-    
-    NSDictionary *sourcePixelBufferAttributesDictionary = [NSDictionary dictionaryWithObjectsAndKeys:
-                                                           
-                                                           [NSNumber numberWithInt:kCVPixelFormatType_32ARGB], kCVPixelBufferPixelFormatTypeKey, nil];
-    
-    
-    
-    [AVAssetWriterInputPixelBufferAdaptor assetWriterInputPixelBufferAdaptorWithAssetWriterInput:_videoWriterInput sourcePixelBufferAttributes:sourcePixelBufferAttributesDictionary];
-    
-    NSParameterAssert(_videoWriterInput);
-    
-    NSParameterAssert([_videoWriter canAddInput:_videoWriterInput]);
-    
-    
-    
-    if ([_videoWriter canAddInput:_videoWriterInput])
-        
-        NSLog(@"I can add this input");
-    
-    else
-        
-        NSLog(@"i can't add this input");
-    
-    
-    
-    // Add the audio input
-    
-    AudioChannelLayout acl;
-    
-    bzero( &acl, sizeof(acl));
-    
-    acl.mChannelLayoutTag = kAudioChannelLayoutTag_Mono;
-    NSDictionary* audioOutputSettings = nil;
-    
-    //    audioOutputSettings = [ NSDictionary dictionaryWithObjectsAndKeys:
-    
-    //                           [ NSNumber numberWithInt: kAudioFormatAppleLossless ], AVFormatIDKey,
-    
-    //                           [ NSNumber numberWithInt: 16 ], AVEncoderBitDepthHintKey,
-    
-    //                           [ NSNumber numberWithFloat: 44100.0 ], AVSampleRateKey,
-    
-    //                           [ NSNumber numberWithInt: 1 ], AVNumberOfChannelsKey,
-    
-    //                           [ NSData dataWithBytes: &acl length: sizeof( acl ) ], AVChannelLayoutKey,
-    
-    //                           nil ];
-    
-    audioOutputSettings = [ NSDictionary dictionaryWithObjectsAndKeys:
-                           
-                           [ NSNumber numberWithInt: kAudioFormatMPEG4AAC ], AVFormatIDKey,
-                           
-                           [ NSNumber numberWithInt:64000], AVEncoderBitRateKey,
-                           
-                           [ NSNumber numberWithFloat: 44100.0 ], AVSampleRateKey,
-                           
-                           [ NSNumber numberWithInt: 1 ], AVNumberOfChannelsKey,                                      
-                           
-                           [ NSData dataWithBytes: &acl length: sizeof( acl ) ], AVChannelLayoutKey,
-                           
-                           nil ];
-    
-    
-    _audioWriterInput = [AVAssetWriterInput assetWriterInputWithMediaType: AVMediaTypeAudio outputSettings: audioOutputSettings ];
-    
-    
-    
-    _audioWriterInput.expectsMediaDataInRealTime = YES;
-    
-    // add input
-    
-    [_videoWriter addInput:_audioWriterInput];
-    
-    [_videoWriter addInput:_videoWriterInput];
-    
-}
 
 -(void)removeNotificationFromCaptureDevice:(AVCaptureDevice *)captureDevice{
     NSNotificationCenter *notificationCenter= [NSNotificationCenter defaultCenter];
@@ -851,13 +579,13 @@ bool i = false;
 
 
 #pragma --mark   硬编码成h624
--(void) encode:(CVImageBufferRef)img{
-
-    
+-(void)encodeCompleteBuffer:(uint8_t *)buffer withLenth:(long)totalLenth{
+    [self startDecodeData];
+    [_decoder decodeBuffer:buffer withLenth:(uint32_t)totalLenth];
 }
-int findHeadindex(char* str,int lenth){
+-(void)decodeCompleteImageData:(CVImageBufferRef)imageBuffer{
+    [self getDecodeImageData:imageBuffer];
     
-    return 0;
 }
 
 
