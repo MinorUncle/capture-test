@@ -7,9 +7,45 @@
 //
 
 #import "H264Decoder.h"
+#define maxCount 10
+//////会覆盖队列
+@interface queue : NSObject 
+{
+    uint8_t* bufferQueue[maxCount];
+    int bufferSize[maxCount];
+}
+@property (assign,readonly) int start;
+@property (assign,readonly)int end;
+
+@end
+@implementation queue
+
+-(void)push:(uint8_t*)buffer size:(int)size{
+    bufferQueue[_end] = buffer;
+    bufferSize[_end] = size;
+    _end = (_end+1) % maxCount;
+}
+-(Boolean)popBuffer:(uint8_t**)outputBuffer size:(int*)outputSize{
+    if (_end == _start) {
+        return false;
+    }
+    int temp = _start;
+    _start = (_start+1) % maxCount;
+    
+    
+    *outputBuffer = bufferQueue[temp];
+    *outputSize = bufferSize[temp];
+    
+    bufferSize[temp] = 0;
+    return true;
+}
+
+@end
+
 @interface H264Decoder()
 {
     dispatch_queue_t _decodeQueue;
+    
 }
 @property(nonatomic)VTDecompressionSessionRef decompressionSession;
 @property (nonatomic, assign) CMVideoFormatDescriptionRef formatDesc;
@@ -17,6 +53,9 @@
 @end
 @implementation H264Decoder
 H264Decoder *decoder;
+uint8_t *pps = NULL;
+uint8_t *sps = NULL;
+
 - (instancetype)init
 {
     self = [super init];
@@ -69,6 +108,10 @@ void decodeOutputCallback(
     [decoder.delegate decodeCompleteImageData:imageBuffer];
     NSLog(@"解码！！status:%d",(int)status);
 }
+
+
+
+
 -(void)decodeBuffer:(uint8_t*)frame withLenth:(uint32_t)frameSize;
 {
     NSLog(@"decodeFrame:%@",[NSThread currentThread]);
@@ -77,8 +120,7 @@ void decodeOutputCallback(
     //    NSData* d = [NSData dataWithBytes:frame length:frameSize];
     //      NSLog(@"d:%@",d);
     uint8_t *data = NULL;
-    uint8_t *pps = NULL;
-    uint8_t *sps = NULL;
+
     
     int startCodeIndex = 0;
     int secondStartCodeIndex = 0;
@@ -101,7 +143,7 @@ void decodeOutputCallback(
     if (nalu_type == 7)
     {
         // 去掉起始头0x00 00 00 01   有的为0x00 00 01
-        for (int i = startCodeIndex + 4; i < startCodeIndex + 44; i++)
+        for (int i = startCodeIndex + 4; i < frameSize; i++)
         {
             if (frame[i] == 0x00 && frame[i+1] == 0x00 && frame[i+2] == 0x00 && frame[i+3] == 0x01)
             {
@@ -116,7 +158,8 @@ void decodeOutputCallback(
     
     if(nalu_type == 8)
     {
-        for (int i = _spsSize + 4; i < _spsSize + 60; i++)
+        int i;
+        for (i = _spsSize + 4; i < frameSize; i++)
         {
             if (frame[i] == 0x00 && frame[i+1] == 0x00 && frame[i+2] == 0x00 && frame[i+3] == 0x01)
             {
@@ -125,7 +168,17 @@ void decodeOutputCallback(
                 break;
             }
         }
+        if (i == frameSize) {
+            thirdStartCodeIndex = i;
+            _ppsSize = thirdStartCodeIndex - _spsSize;
+        }
     
+        if (sps != NULL) {
+            [self relaseData:sps];
+        }
+        if (pps != NULL) {
+            [self relaseData:pps];
+        }
         sps = malloc(_spsSize - 4);
         pps = malloc(_ppsSize - 4);
         
@@ -152,8 +205,10 @@ void decodeOutputCallback(
     {
         int offset = _spsSize + _ppsSize;
         blockLength = frameSize - offset;
-        data = malloc(blockLength);
-        data = memcpy(data, &frame[offset], blockLength);
+        
+        data = &frame[offset];
+//        data = malloc(blockLength);
+//        data = memcpy(data, &frame[offset], blockLength);
         
         uint32_t dataLength32 = htonl (blockLength - 4);
         memcpy (data, &dataLength32, sizeof (uint32_t));
@@ -171,8 +226,9 @@ void decodeOutputCallback(
     if (nalu_type == 1)
     {
         blockLength = frameSize;
-        data = malloc(blockLength);
-        data = memcpy(data, &frame[0], blockLength);
+        data = frame;
+//        data = malloc(blockLength);
+//        data = memcpy(data, &frame[0], blockLength);
         
         uint32_t dataLength32 = htonl (blockLength - 4);
         memcpy (data, &dataLength32, sizeof (uint32_t));
@@ -215,9 +271,7 @@ void decodeOutputCallback(
         blockBuffer = NULL;
     }
     
-    [self relaseData:data];
-    [self relaseData:pps];
-    [self relaseData:sps];
+  
     
 }
 -(void)relaseData:(uint8_t*) tmpData{
@@ -235,6 +289,40 @@ void decodeOutputCallback(
     VTDecodeInfoFlags flagOut;
     VTDecompressionSessionDecodeFrame(_decompressionSession, sampleBuffer, flags,&sampleBuffer, &flagOut);
 }
-
+NSString * const naluTypesStrings[] =
+{
+    @"0: Unspecified (non-VCL)",
+    @"1: Coded slice of a non-IDR picture (VCL)",    // P frame
+    @"2: Coded slice data partition A (VCL)",
+    @"3: Coded slice data partition B (VCL)",
+    @"4: Coded slice data partition C (VCL)",
+    @"5: Coded slice of an IDR picture (VCL)",      // I frame
+    @"6: Supplemental enhancement information (SEI) (non-VCL)",
+    @"7: Sequence parameter set (non-VCL)",         // SPS parameter
+    @"8: Picture parameter set (non-VCL)",          // PPS parameter
+    @"9: Access unit delimiter (non-VCL)",
+    @"10: End of sequence (non-VCL)",
+    @"11: End of stream (non-VCL)",
+    @"12: Filler data (non-VCL)",
+    @"13: Sequence parameter set extension (non-VCL)",
+    @"14: Prefix NAL unit (non-VCL)",
+    @"15: Subset sequence parameter set (non-VCL)",
+    @"16: Reserved (non-VCL)",
+    @"17: Reserved (non-VCL)",
+    @"18: Reserved (non-VCL)",
+    @"19: Coded slice of an auxiliary coded picture without partitioning (non-VCL)",
+    @"20: Coded slice extension (non-VCL)",
+    @"21: Coded slice extension for depth view components (non-VCL)",
+    @"22: Reserved (non-VCL)",
+    @"23: Reserved (non-VCL)",
+    @"24: STAP-A Single-time aggregation packet (non-VCL)",
+    @"25: STAP-B Single-time aggregation packet (non-VCL)",
+    @"26: MTAP16 Multi-time aggregation packet (non-VCL)",
+    @"27: MTAP24 Multi-time aggregation packet (non-VCL)",
+    @"28: FU-A Fragmentation unit (non-VCL)",
+    @"29: FU-B Fragmentation unit (non-VCL)",
+    @"30: Unspecified (non-VCL)",
+    @"31: Unspecified (non-VCL)",
+};
 
 @end

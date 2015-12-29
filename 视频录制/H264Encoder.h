@@ -18,4 +18,6 @@
 @interface H264Encoder : NSObject
 @property(nonatomic,weak)id<H264EncoderDelegate> deleagte;
 -(void)encodeSampleBuffer:(CMSampleBufferRef)sampleBuffer;
+-(void)stop;
+-(void)restart;
 @end

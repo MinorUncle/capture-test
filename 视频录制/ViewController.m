@@ -13,14 +13,14 @@
 #import <VideoToolbox/VideoToolbox.h>
 #import "H264Decoder.h"
 #import "H264Encoder.h"
-#define fps 30
+#define fps 10
 typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 
 @interface ViewController ()<AVCaptureFileOutputRecordingDelegate,AVCaptureVideoDataOutputSampleBufferDelegate,H264DecoderDelegate,H264EncoderDelegate>//视频文件输出代理
 {
     long frameCount;///每一重计，计算帧率
-    long totalCount;
-    
+    long totalCount;////总共多少帧
+    long totalSize;////总共传输大小
     
     AAPLEAGLLayer *openGLLayer;
     NSTimer* _timer;
@@ -30,9 +30,6 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 @property (strong,nonatomic) AVCaptureDeviceInput *captureDeviceInput;//负责从AVCaptureDevice获得输入数据
 @property (strong,nonatomic) AVCaptureMovieFileOutput *captureMovieFileOutput;//视频输出流
 @property (strong,nonatomic) AVCaptureVideoDataOutput *captureDataOutput;//视频输出流
-@property (strong,nonatomic) AVAssetWriter* videoWriter ;//写文件AVAssetWriterInput
-@property (strong,nonatomic) AVAssetWriterInput* videoWriterInput;//写文件
-@property(strong ,nonatomic)AVAssetWriterInput* audioWriterInput;
 
 
 @property (strong,nonatomic) AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;//相机拍摄预览图层
@@ -51,6 +48,8 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 @property NSMutableArray *presentationTimes;
 @property dispatch_semaphore_t bufferSemaphore;
 @property (weak, nonatomic) IBOutlet UILabel *fpsLab;
+@property (weak, nonatomic) IBOutlet UILabel *ptsLab;
+
 @property(nonatomic)H264Decoder* decoder;
 @property(nonatomic)H264Encoder* encoder;
 
@@ -62,8 +61,7 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 
 @end
 
-NSData * sps;
-NSData * pps;
+
 @implementation ViewController
 
 
@@ -71,6 +69,8 @@ NSData * pps;
 
 -(void)timeFire:(NSTimer*)time{
     self.fpsLab.text = [NSString stringWithFormat:@"fps:%ld",frameCount];
+    self.ptsLab.text = [NSString stringWithFormat:@"pts:%0.2f kb/s",totalSize/1024.0];
+    totalSize = 0;
     frameCount = 0;
 }
 - (void)viewDidLoad {
@@ -105,12 +105,7 @@ NSData * pps;
         return;
     }
     NSError* error;
-    if([self.captureDevice lockForConfiguration:&error]){
-        self.captureDevice.activeVideoMinFrameDuration = CMTimeMake(1, 20);
-    }else{
-        NSLog(@"error:%@",error.localizedDescription);
-    }
-
+   
     //添加一个音频输入设备
     AVCaptureDevice *audioCaptureDevice=[[AVCaptureDevice devicesWithMediaType:AVMediaTypeAudio] firstObject];
     
@@ -136,7 +131,6 @@ NSData * pps;
 
     }
     
-
     
     if ([_captureSession canAddOutput:_captureDataOutput]) {
         [_captureSession addOutput:_captureDataOutput];
@@ -154,20 +148,36 @@ NSData * pps;
     //[layer addSublayer:_captureVideoPreviewLayer];
     [layer insertSublayer:_captureVideoPreviewLayer below:self.focusCursor.layer];
     
-    _enableRotation=YES;
     [self addNotificationToCaptureDevice:self.captureDevice];
     [self addGenstureRecognizer];
+    
+    
+    
+    //链接创建后
+    if([self.captureDevice lockForConfiguration:&error]){
+        self.captureDevice.activeVideoMinFrameDuration = CMTimeMake(1, fps);
+        self.captureDevice.activeVideoMaxFrameDuration = CMTimeMake(1, fps);
+        [self.captureDevice unlockForConfiguration];
+    }else{
+        NSLog(@"error:%@",error.localizedDescription);
+        return;
+    }
+    
+    
+
    
 }
 
 -(void)viewDidAppear:(BOOL)animated{
     [super viewDidAppear:animated];
     [self.captureSession startRunning];
+    [_encoder restart];
 }
 
 -(void)viewDidDisappear:(BOOL)animated{
     [super viewDidDisappear:animated];
     [self.captureSession stopRunning];
+    [_encoder stop];
 }
 
 -(BOOL)shouldAutorotate{
@@ -176,17 +186,18 @@ NSData * pps;
 
 
 ////屏幕旋转时调整视频预览图层的方向
-//-(void)willTransitionToTraitCollection:(UITraitCollection *)newCollection withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator{
-//    [super willTransitionToTraitCollection:newCollection withTransitionCoordinator:coordinator];
-////    NSLog(@"%i,%i",newCollection.verticalSizeClass,newCollection.horizontalSizeClass);
-//    UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
-//    NSLog(@"%i",orientation);
-//    AVCaptureConnection *captureConnection=[self.captureVideoPreviewLayer connection];
-//    captureConnection.videoOrientation=orientation;
-//
-//}
+-(void)willTransitionToTraitCollection:(UITraitCollection *)newCollection withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator{
+    [super willTransitionToTraitCollection:newCollection withTransitionCoordinator:coordinator];
+//    NSLog(@"%i,%i",newCollection.verticalSizeClass,newCollection.horizontalSizeClass);
+    UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
+    AVCaptureConnection *captureConnection=[self.captureVideoPreviewLayer connection];
+    captureConnection.videoOrientation = (AVCaptureVideoOrientation)orientation;
+
+}
+
 //屏幕旋转时调整视频预览图层的方向
 -(void)willRotateToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation duration:(NSTimeInterval)duration{
+    
     AVCaptureConnection *captureConnection=[self.captureVideoPreviewLayer connection];
     captureConnection.videoOrientation=(AVCaptureVideoOrientation)toInterfaceOrientation;
 }
@@ -225,24 +236,24 @@ NSData * pps;
     }
     else{
         
-//        [self.captureMovieFileOutput stopRecording];//停止录制
+        [self.captureMovieFileOutput stopRecording];//停止录制
         [sender setTitle:@"开始录制" forState:UIControlStateNormal];
     }
 }
 #pragma mark 切换前后摄像头
 - (IBAction)toggleButtonClick:(UIButton *)sender {
-    AVCaptureDevice *currentDevice=[self.captureDeviceInput device];
-    AVCaptureDevicePosition currentPosition=[currentDevice position];
-    [self removeNotificationFromCaptureDevice:currentDevice];
-    AVCaptureDevice *toChangeDevice;
+    [self removeNotificationFromCaptureDevice:self.captureDevice];
+    AVCaptureDevicePosition currentPosition=[self.captureDevice position];
+   
+    self.captureDevice =[self.captureDeviceInput device];
     AVCaptureDevicePosition toChangePosition=AVCaptureDevicePositionFront;
     if (currentPosition==AVCaptureDevicePositionUnspecified||currentPosition==AVCaptureDevicePositionFront) {
         toChangePosition=AVCaptureDevicePositionBack;
     }
-    toChangeDevice=[self getCameraDeviceWithPosition:toChangePosition];
-    [self addNotificationToCaptureDevice:toChangeDevice];
+    self.captureDevice =[self getCameraDeviceWithPosition:toChangePosition];
+    [self addNotificationToCaptureDevice:self.captureDevice ];
     //获得要调整的设备输入对象
-    AVCaptureDeviceInput *toChangeDeviceInput=[[AVCaptureDeviceInput alloc]initWithDevice:toChangeDevice error:nil];
+    AVCaptureDeviceInput *toChangeDeviceInput=[[AVCaptureDeviceInput alloc]initWithDevice:self.captureDevice  error:nil];
     
     //改变会话的配置前一定要先开启配置，配置完成后提交配置改变
     [self.captureSession beginConfiguration];
@@ -255,6 +266,19 @@ NSData * pps;
     }
     //提交会话配置
     [self.captureSession commitConfiguration];
+    
+    self.captureDeviceInput = toChangeDeviceInput;
+    
+    NSError* error;
+    //链接创建后
+    if([self.captureDevice lockForConfiguration:&error]){
+        self.captureDevice.activeVideoMinFrameDuration = CMTimeMake(1, fps);
+        self.captureDevice.activeVideoMaxFrameDuration = CMTimeMake(1, fps);
+        [self.captureDevice unlockForConfiguration];
+    }else{
+        NSLog(@"error:%@",error.localizedDescription);
+        return;
+    }
     
 }
 
@@ -579,10 +603,13 @@ bool i = false;
 
 
 #pragma --mark   硬编码成h624
+//编码完成代理
 -(void)encodeCompleteBuffer:(uint8_t *)buffer withLenth:(long)totalLenth{
     [self startDecodeData];
+    totalSize+= totalLenth;
     [_decoder decodeBuffer:buffer withLenth:(uint32_t)totalLenth];
 }
+//解码完成代理
 -(void)decodeCompleteImageData:(CVImageBufferRef)imageBuffer{
     [self getDecodeImageData:imageBuffer];
     

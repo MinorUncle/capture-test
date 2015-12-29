@@ -9,13 +9,15 @@
 #import "H264Encoder.h"
 @interface H264Encoder()
 {
-    
+    long encoderFrameCount;
 
 }
 @property(nonatomic)VTCompressionSessionRef enCodeSession;
 @end
 
 @implementation H264Encoder
+int _keyInterval;////key内的p帧数量
+
 H264Encoder* encoder ;
 - (instancetype)init
 {
@@ -32,19 +34,23 @@ H264Encoder* encoder ;
 //编码
 -(void)encodeSampleBuffer:(CMSampleBufferRef)sampleBuffer
 {
+    
     CVImageBufferRef imgRef = CMSampleBufferGetImageBuffer(sampleBuffer);
+    CMTime presentationTimeStamp = CMTimeMake(encoderFrameCount, 10);
     OSStatus status = VTCompressionSessionEncodeFrame(
                                                   _enCodeSession,
                                                   imgRef,
-                                                  kCMTimeInvalid,
+                                                  presentationTimeStamp,
                                                   kCMTimeInvalid, // may be kCMTimeInvalid
                                                   NULL,
                                                   NULL,
                                                   NULL );
+    encoderFrameCount++;
     if (status != 0) {
         NSLog(@"encodeSampleBuffer error:%d",status);
         return;
     }
+    
 }
 
 -(void)creatEnCodeSession{
@@ -61,6 +67,29 @@ H264Encoder* encoder ;
                                             &_enCodeSession);
     NSLog(@"VTCompressionSessionCreate status:%d",(int)t);
     VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_RealTime, kCFBooleanTrue);
+    VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_AllowFrameReordering, kCFBooleanFalse);
+    VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_ProfileLevel, kVTProfileLevel_H264_Baseline_AutoLevel);
+    
+//    SInt32 bitRate = 8000;
+//    CFNumberRef ref = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &bitRate);
+//    VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_AverageBitRate, ref);
+//    CFRelease(ref);
+    
+    float quality = 0.5;
+    CFNumberRef  qualityRef = CFNumberCreate(kCFAllocatorDefault, kCFNumberFloatType,&quality);
+    VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_Quality,qualityRef);
+      CFRelease(qualityRef);
+    
+    int frameInterval = 240;
+    CFNumberRef  frameIntervalRef = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &frameInterval);
+    VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_MaxKeyFrameInterval,frameIntervalRef);
+      CFRelease(frameIntervalRef);
+    
+    VTCompressionSessionPrepareToEncodeFrames(_enCodeSession);
+//    UInt32 num = 5;
+//    CFNumberRef ref = CFNumberCreate(NULL, kCFNumberSInt32Type,&num);
+//    VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_ExpectedFrameRate,ref);
+
     
 }
 
@@ -80,10 +109,12 @@ void encodeOutputCallback(void *  outputCallbackRefCon,void *  sourceFrameRefCon
     }
 
     bool keyframe = !CFDictionaryContainsKey( (CFArrayGetValueAtIndex(CMSampleBufferGetSampleAttachmentsArray(sample, true), 0)), kCMSampleAttachmentKey_NotSync);
-    NSMutableData* data = [[NSMutableData alloc]init];
+
     
     if (keyframe)
     {
+        NSLog(@"key interval%d",_keyInterval);
+        _keyInterval = -1;
         CMFormatDescriptionRef format = CMSampleBufferGetFormatDescription(sample);
         size_t sparameterSetSize, sparameterSetCount;
         int spHeadSize;
@@ -97,17 +128,20 @@ void encodeOutputCallback(void *  outputCallbackRefCon,void *  sourceFrameRefCon
             OSStatus statusCode = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(format, 1, &pparameterSet, &pparameterSetSize, &pparameterSetCount, &ppHeadSize );
             if (statusCode == noErr)
             {
-                [data  appendBytes:"\x00\x00\x00\x01" length:4]; NSLog(@"data:%@",data);
-                [data appendBytes:sparameterSet length:sparameterSetSize]; NSLog(@"data:%@",data);
-                [data appendBytes:"\x00\x00\x00\x01" length:4]; NSLog(@"data:%@",data);
-                [data appendBytes:pparameterSet length:pparameterSetSize];
+                uint8_t* data = malloc(4+4+sparameterSetSize+pparameterSetSize);
+                memcpy(&data[0], "\x00\x00\x00\x01", 4);
+                memcpy(&data[4], sparameterSet, sparameterSetSize);
+                memcpy(&data[4+sparameterSetSize], "\x00\x00\x00\x01", 4);
+                memcpy(&data[8+sparameterSetSize], pparameterSet, pparameterSetSize);
+                [encoder.deleagte encodeCompleteBuffer:data withLenth:pparameterSetSize+sparameterSetSize+8];
+                free(data);
             }
         }
     }
     
     CMBlockBufferRef dataBuffer = CMSampleBufferGetDataBuffer(sample);
     size_t length, totalLength;
-    char *dataPointer;
+    uint8_t *dataPointer;
     OSStatus statusCodeRet = CMBlockBufferGetDataPointer(dataBuffer, 0, &length, &totalLength, &dataPointer);
     
 
@@ -117,25 +151,27 @@ void encodeOutputCallback(void *  outputCallbackRefCon,void *  sourceFrameRefCon
         static const uint32_t AVCCHeaderLength = 4;
         while (bufferOffset < totalLength - AVCCHeaderLength) {
             
+            _keyInterval++;
             // Read the NAL unit length
             uint32_t NALUnitLength = 0;
             memcpy(&NALUnitLength, dataPointer + bufferOffset, AVCCHeaderLength);
             
             NALUnitLength = CFSwapInt32BigToHost(NALUnitLength);
-            [data appendBytes:"\x00\x00\x00\x01" length:4];
-            [data appendBytes:dataPointer + bufferOffset + AVCCHeaderLength length:NALUnitLength];
-            NSMutableData* temData = data;
+            uint8_t* data = dataPointer + bufferOffset;
+            memcpy(&data[0], "\x00\x00\x00\x01", 4);
+        
+            [encoder.deleagte encodeCompleteBuffer:data withLenth:NALUnitLength + 4];
             
-            uint8_t* frame = malloc(temData.length) ;
-            
-            [temData getBytes:frame length:temData.length];
-            [encoder.deleagte encodeCompleteBuffer:frame withLenth:temData.length];
-            
-            data = [[NSMutableData alloc]init];
             bufferOffset += AVCCHeaderLength + NALUnitLength;
         }
     }
 }
+-(void)stop{
+    _enCodeSession = nil;
+}
+-(void)restart{
 
+    [self creatEnCodeSession];
+}
 
 @end
