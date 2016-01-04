@@ -47,7 +47,7 @@ H264Encoder* encoder ;
                                                   NULL );
     encoderFrameCount++;
     if (status != 0) {
-        NSLog(@"encodeSampleBuffer error:%d",status);
+        NSLog(@"encodeSampleBuffer error:%d",(int)status);
         return;
     }
     
@@ -69,21 +69,23 @@ H264Encoder* encoder ;
     VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_RealTime, kCFBooleanTrue);
     VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_AllowFrameReordering, kCFBooleanFalse);
     VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_ProfileLevel, kVTProfileLevel_H264_Baseline_AutoLevel);
+    VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_H264EntropyMode, kVTH264EntropyMode_CAVLC);
+
     
-//    SInt32 bitRate = 8000;
+//    SInt32 bitRate = 0.5;
 //    CFNumberRef ref = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &bitRate);
 //    VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_AverageBitRate, ref);
 //    CFRelease(ref);
     
-    float quality = 0.5;
-    CFNumberRef  qualityRef = CFNumberCreate(kCFAllocatorDefault, kCFNumberFloatType,&quality);
-    VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_Quality,qualityRef);
-      CFRelease(qualityRef);
+//    float quality = 0.5;
+//    CFNumberRef  qualityRef = CFNumberCreate(kCFAllocatorDefault, kCFNumberFloatType,&quality);
+//    VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_Quality,qualityRef);
+//      CFRelease(qualityRef);
     
-    int frameInterval = 240;
+    int frameInterval = 0;
     CFNumberRef  frameIntervalRef = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &frameInterval);
     VTSessionSetProperty(_enCodeSession, kVTCompressionPropertyKey_MaxKeyFrameInterval,frameIntervalRef);
-      CFRelease(frameIntervalRef);
+    CFRelease(frameIntervalRef);
     
     VTCompressionSessionPrepareToEncodeFrames(_enCodeSession);
 //    UInt32 num = 5;
@@ -102,12 +104,6 @@ void encodeOutputCallback(void *  outputCallbackRefCon,void *  sourceFrameRefCon
         return;
     }
     
-    if (!CMSampleBufferDataIsReady(sample))
-    {
-        NSLog(@"didCompressH264 data is not ready ");
-        return;
-    }
-
     bool keyframe = !CFDictionaryContainsKey( (CFArrayGetValueAtIndex(CMSampleBufferGetSampleAttachmentsArray(sample, true), 0)), kCMSampleAttachmentKey_NotSync);
 
     

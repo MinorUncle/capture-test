@@ -7,7 +7,8 @@
 //
 
 #import "ViewController.h"
-#import "AAPLEAGLLayer.h"
+//#import "AAPLEAGLLayer.h"
+#import "OpenGLView20.h"
 #import <AVFoundation/AVFoundation.h>
 #import <AssetsLibrary/AssetsLibrary.h>
 #import <VideoToolbox/VideoToolbox.h>
@@ -22,7 +23,8 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
     long totalCount;////总共多少帧
     long totalSize;////总共传输大小
     
-    AAPLEAGLLayer *openGLLayer;
+//    AAPLEAGLLayer *openGLLayer;
+//    OpenGLView20* openGLPlayer;
     NSTimer* _timer;
 
 }
@@ -41,12 +43,9 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 @property (weak, nonatomic) IBOutlet UIView *viewContainer;
 @property (weak, nonatomic) IBOutlet UIButton *takeButton;//拍照按钮
 @property (weak, nonatomic) IBOutlet UIImageView *focusCursor; //聚焦光标
-@property (weak, nonatomic) IBOutlet UIView *playView;    ///播放view
+@property (weak, nonatomic) IBOutlet OpenGLView20 *playView;    ///播放view
 
-@property CADisplayLink *displayLink;
-@property NSMutableArray *outputFrames;
-@property NSMutableArray *presentationTimes;
-@property dispatch_semaphore_t bufferSemaphore;
+
 @property (weak, nonatomic) IBOutlet UILabel *fpsLab;
 @property (weak, nonatomic) IBOutlet UILabel *ptsLab;
 
@@ -81,14 +80,6 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
     _decoder.delegate = self;
     _timer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(timeFire:) userInfo:nil repeats:YES];
     
-    self.outputFrames = [NSMutableArray new];
-    self.presentationTimes = [NSMutableArray new];
-    
-    self.displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
-    [self.displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-    [self.displayLink setPaused:YES];
-    self.bufferSemaphore = dispatch_semaphore_create(0);
-    
 }
 
 -(void)viewWillAppear:(BOOL)animated{
@@ -98,6 +89,7 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
     if ([_captureSession canSetSessionPreset:AVCaptureSessionPreset640x480]) {//设置分辨率
         _captureSession.sessionPreset=AVCaptureSessionPreset640x480;
     }
+ 
     //获得输入设备
     self.captureDevice=[self getCameraDeviceWithPosition:AVCaptureDevicePositionBack];//取得后置摄像头
     if (!self.captureDevice) {
@@ -142,11 +134,12 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
     CALayer *layer=self.viewContainer.layer;
     layer.masksToBounds=YES;
     
-    _captureVideoPreviewLayer.frame=layer.bounds;
-    _captureVideoPreviewLayer.videoGravity=AVLayerVideoGravityResizeAspect;//填充模式
+    _captureVideoPreviewLayer.videoGravity = AVLayerVideoGravityResizeAspect;//填充模式
     //将视频预览层添加到界面中
     //[layer addSublayer:_captureVideoPreviewLayer];
     [layer insertSublayer:_captureVideoPreviewLayer below:self.focusCursor.layer];
+    _captureVideoPreviewLayer.frame=layer.bounds;
+
     
     [self addNotificationToCaptureDevice:self.captureDevice];
     [self addGenstureRecognizer];
@@ -162,7 +155,7 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
         NSLog(@"error:%@",error.localizedDescription);
         return;
     }
-    
+    _enableRotation = YES;
     
 
    
@@ -186,25 +179,26 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 
 
 ////屏幕旋转时调整视频预览图层的方向
--(void)willTransitionToTraitCollection:(UITraitCollection *)newCollection withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator{
-    [super willTransitionToTraitCollection:newCollection withTransitionCoordinator:coordinator];
-//    NSLog(@"%i,%i",newCollection.verticalSizeClass,newCollection.horizontalSizeClass);
+
+-(void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection{
+    [super traitCollectionDidChange:previousTraitCollection];
     UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
     AVCaptureConnection *captureConnection=[self.captureVideoPreviewLayer connection];
     captureConnection.videoOrientation = (AVCaptureVideoOrientation)orientation;
-
 }
 
-//屏幕旋转时调整视频预览图层的方向
--(void)willRotateToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation duration:(NSTimeInterval)duration{
-    
-    AVCaptureConnection *captureConnection=[self.captureVideoPreviewLayer connection];
-    captureConnection.videoOrientation=(AVCaptureVideoOrientation)toInterfaceOrientation;
-}
+
 //旋转后重新设置大小
 -(void)didRotateFromInterfaceOrientation:(UIInterfaceOrientation)fromInterfaceOrientation{
     _captureVideoPreviewLayer.frame=self.viewContainer.bounds;
 }
+
+//-(void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator{
+//    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+//    NSLog(@"%@", [NSValue valueWithCGRect: self.viewContainer.layer.bounds]);
+//    _captureVideoPreviewLayer.frame=self.viewContainer.layer.bounds;
+//}
+
 
 -(void)dealloc{
     [self removeNotification];
@@ -217,7 +211,7 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
     //根据连接取得设备输出的数据
     if (![self.captureMovieFileOutput isRecording]) {
         [sender setTitle:@"停止录制" forState:UIControlStateNormal];
-        self.enableRotation=NO;
+//        self.enableRotation=NO;
         //如果支持多任务则则开始多任务
         if ([[UIDevice currentDevice] isMultitaskingSupported]) {
             self.backgroundTaskIdentifier=[[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:nil];
@@ -231,7 +225,7 @@ typedef void(^PropertyChangeBlock)(AVCaptureDevice *captureDevice);
 //        NSArray* b = self.captureDataOutput.availableVideoCVPixelFormatTypes;
 //        NSLog(@"%@", a);
 //        NSLog(@"%@", b);
-//        self.captureDataOutput.videoSettings = @{(id)kCVPixelBufferPixelFormatTypeKey:b[2]};
+        self.captureDataOutput.videoSettings = @{(id)kCVPixelBufferPixelFormatTypeKey:@(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)};
         [self.captureDataOutput setSampleBufferDelegate:self queue:dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)];
     }
     else{
@@ -524,95 +518,26 @@ bool i = false;
 
 
 
-#pragma mark   opengl
-- (void)displayPixelBuffer:(CVImageBufferRef)imageBuffer
-{
-   
-    if (!openGLLayer) {
-        int width = (int)CVPixelBufferGetWidth(imageBuffer);
-        int height = (int)CVPixelBufferGetHeight(imageBuffer);
-        CGFloat halfWidth = self.view.frame.size.width;
-        CGFloat halfheight = self.view.frame.size.height;
-        if (width > halfWidth || height > halfheight) {
-            width /= 2;
-            height /= 2;
-        }
-        openGLLayer = [[AAPLEAGLLayer alloc] init];
-        [openGLLayer setFrame:CGRectMake((self.playView.bounds.size.width-width)/2,0, width, height)];
-        openGLLayer.presentationRect = CGSizeMake(width, height);
-        
-        [openGLLayer setupGL];
-        [self.playView.layer addSublayer:openGLLayer];
-        
-    }
-    
-    [openGLLayer displayPixelBuffer:imageBuffer];
-    
-}
 
 
 
-- (void)displayLinkCallback:(CADisplayLink *)sender
-{
-    if ([self.outputFrames count] && [self.presentationTimes count]) {
-        CVImageBufferRef imageBuffer = NULL;
-        NSNumber *insertionIndex = nil;
-        id imageBufferObject = nil;
-        @synchronized(self){
-            insertionIndex = [self.presentationTimes firstObject];
-            imageBufferObject = [self.outputFrames firstObject];
-            imageBuffer = (__bridge CVImageBufferRef)imageBufferObject;
-            
-            if (imageBufferObject) {
-                [self.outputFrames removeObjectAtIndex:0];
-            }
-            if (insertionIndex) {
-                [self.presentationTimes removeObjectAtIndex:0];
-                if ([self.presentationTimes count] == 3) {
-                    dispatch_semaphore_signal(self.bufferSemaphore);
-                }
-            }
-            
-            if (imageBuffer) {
-                [self displayPixelBuffer:imageBuffer];
-            }
-        }
-        
-    }
-}
-#pragma --mark H264DecoderDelegate
--(void) startDecodeData
-{
-    if ([self.presentationTimes count] >= 5) {
-        [self.displayLink setPaused:NO];
-        dispatch_semaphore_wait(self.bufferSemaphore, DISPATCH_TIME_FOREVER);
-    }
-}
-
--(void) getDecodeImageData:(CVImageBufferRef) imageBuffer
-{
-    id imageBufferObject = (__bridge id)imageBuffer;
-    @synchronized(self){
-        NSUInteger insertionIndex = self.presentationTimes.count + 1;
-        
-        [self.outputFrames addObject:imageBufferObject];
-        [self.presentationTimes addObject:[NSNumber numberWithInteger:insertionIndex]];
-        
-    }
-}
 
 
 #pragma --mark   硬编码成h624
 //编码完成代理
 -(void)encodeCompleteBuffer:(uint8_t *)buffer withLenth:(long)totalLenth{
-    [self startDecodeData];
     totalSize+= totalLenth;
+    NSLog(@"totalLenth:%ld",totalLenth);
     [_decoder decodeBuffer:buffer withLenth:(uint32_t)totalLenth];
 }
 //解码完成代理
 -(void)decodeCompleteImageData:(CVImageBufferRef)imageBuffer{
-    [self getDecodeImageData:imageBuffer];
-    
+    CVPixelBufferLockBaseAddress(imageBuffer, 0);
+    void* baseAdd = CVPixelBufferGetBaseAddress(imageBuffer);
+    CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
+//    size_t w = CVPixelBufferGetWidth(imageBuffer);
+//    size_t h = CVPixelBufferGetHeight(imageBuffer);
+    [_playView displayYUV420pData:baseAdd width:640 height:480];
 }
 
 

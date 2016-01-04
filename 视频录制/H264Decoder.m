@@ -101,12 +101,11 @@ void decodeOutputCallback(
     NSLog(@"decodeOutputCallback:%@",[NSThread currentThread]);
     
     if (status != 0) {
-        NSLog(@"解码error:%d",status);
+        NSLog(@"解码error:%d",(int)status);
         return;
     }
     
     [decoder.delegate decodeCompleteImageData:imageBuffer];
-    NSLog(@"解码！！status:%d",(int)status);
 }
 
 
@@ -140,44 +139,37 @@ void decodeOutputCallback(
         return;
     }
     
-    if (nalu_type == 7)
+    if (nalu_type == 7)    ///sps
     {
         // 去掉起始头0x00 00 00 01   有的为0x00 00 01
-        for (int i = startCodeIndex + 4; i < frameSize; i++)
-        {
-            if (frame[i] == 0x00 && frame[i+1] == 0x00 && frame[i+2] == 0x00 && frame[i+3] == 0x01)
-            {
-                secondStartCodeIndex = i;
-                _spsSize = secondStartCodeIndex;
-                break;
-            }
+        int i = [self findFlgIndexData:&frame[startCodeIndex + 4] lenth:frameSize - startCodeIndex -4];
+        if (i != -1) {
+            secondStartCodeIndex = i + startCodeIndex + 4;
+            _spsSize = secondStartCodeIndex;
+        }else{
+            return;
         }
         
         nalu_type = (frame[secondStartCodeIndex + 4] & 0x1F);
     }
     
-    if(nalu_type == 8)
+    if(nalu_type == 8)    ///pps
     {
-        int i;
-        for (i = _spsSize + 4; i < frameSize; i++)
-        {
-            if (frame[i] == 0x00 && frame[i+1] == 0x00 && frame[i+2] == 0x00 && frame[i+3] == 0x01)
-            {
-                thirdStartCodeIndex = i;
-                _ppsSize = thirdStartCodeIndex - _spsSize;
-                break;
-            }
-        }
-        if (i == frameSize) {
-            thirdStartCodeIndex = i;
+        int i = [self findFlgIndexData:&frame[secondStartCodeIndex + 4] lenth:frameSize - secondStartCodeIndex - 4];
+        if (i != -1) {
+            thirdStartCodeIndex = i + secondStartCodeIndex + 4;
+            _ppsSize = thirdStartCodeIndex - _spsSize;
+        }else{
+            thirdStartCodeIndex = frameSize;
             _ppsSize = thirdStartCodeIndex - _spsSize;
         }
-    
+        
+           
         if (sps != NULL) {
-            [self relaseData:sps];
+            free(sps);
         }
         if (pps != NULL) {
-            [self relaseData:pps];
+            free(pps);
         }
         sps = malloc(_spsSize - 4);
         pps = malloc(_ppsSize - 4);
@@ -187,13 +179,20 @@ void decodeOutputCallback(
         
         uint8_t*  parameterSetPointers[2] = {sps, pps};
         size_t parameterSetSizes[2] = {_spsSize-4, _ppsSize-4};
+        if (_formatDesc != nil) {
+            CFRelease(_formatDesc);
+        }
         
         status = CMVideoFormatDescriptionCreateFromH264ParameterSets(kCFAllocatorDefault, 2,
                                                                      (const uint8_t *const*)parameterSetPointers,
                                                                      parameterSetSizes, 4,
                                                                      &_formatDesc);
-        
-        nalu_type = (frame[thirdStartCodeIndex + 4] & 0x1F);
+        if (frameSize <= thirdStartCodeIndex +4) {
+            return;
+        }else{
+            nalu_type = (frame[thirdStartCodeIndex + 4] & 0x1F);
+        }
+
     }
     
     if((status == noErr) && (_decompressionSession == NULL))
@@ -201,48 +200,47 @@ void decodeOutputCallback(
         [self createDecompSession];
     }
     
-    if(nalu_type == 5)   //i帧
-    {
-        int offset = _spsSize + _ppsSize;
-        blockLength = frameSize - offset;
-        
-        data = &frame[offset];
-//        data = malloc(blockLength);
-//        data = memcpy(data, &frame[offset], blockLength);
-        
-        uint32_t dataLength32 = htonl (blockLength - 4);
-        memcpy (data, &dataLength32, sizeof (uint32_t));
-        
-        status = CMBlockBufferCreateWithMemoryBlock(NULL, data,
-                                                    blockLength,
-                                                    kCFAllocatorNull, NULL,
-                                                    0,
-                                                    blockLength,
-                                                    0, &blockBuffer);
-        
+    NSLog(@"numtpty:%d",nalu_type);
+//    if(1)   //5则帧，1则p帧
+    
+    int offset = _spsSize + _ppsSize;
+    blockLength = frameSize - offset;
+    data = &frame[offset];
+    uint32_t dataLength32 = htonl (blockLength - 4);
+    memcpy (data, &dataLength32, sizeof (uint32_t));
+    status = CMBlockBufferCreateWithMemoryBlock(NULL, data,
+                                                blockLength,
+                                                kCFAllocatorNull, NULL,
+                                                0,
+                                                blockLength,
+                                                0, &blockBuffer);
+    if (status != 0) {
         NSLog(@"\t\t BlockBufferCreation: \t %@", (status == kCMBlockBufferNoErr) ? @"successful!" : @"failed...");
+        return;
     }
     
-    if (nalu_type == 1)
-    {
-        blockLength = frameSize;
-        data = frame;
-//        data = malloc(blockLength);
-//        data = memcpy(data, &frame[0], blockLength);
-        
-        uint32_t dataLength32 = htonl (blockLength - 4);
-        memcpy (data, &dataLength32, sizeof (uint32_t));
-        
-        status = CMBlockBufferCreateWithMemoryBlock(NULL, data,
-                                                    blockLength,
-                                                    kCFAllocatorNull, NULL,
-                                                    0,
-                                                    blockLength,
-                                                    0, &blockBuffer);
-    }
+    
+//    if (nalu_type == 1)     //p帧
+//    {
+//        blockLength = frameSize;
+//        data = frame;
+////        data = malloc(blockLength);
+////        data = memcpy(data, &frame[0], blockLength);
+//        
+//        uint32_t dataLength32 = htonl (blockLength - 4);
+//        memcpy (data, &dataLength32, sizeof (uint32_t));
+//        
+//        status = CMBlockBufferCreateWithMemoryBlock(NULL, data,
+//                                                    blockLength,
+//                                                    kCFAllocatorNull, NULL,
+//                                                    0,
+//                                                    blockLength,
+//                                                    0, &blockBuffer);
+//    }
     if (blockLength == 0) {
         return;
     }
+    
     
     if(status == noErr)
     {
@@ -251,8 +249,10 @@ void decodeOutputCallback(
                                       blockBuffer, true, NULL, NULL,
                                       _formatDesc, 1, 0, NULL, 1,
                                       &sampleSize, &sampleBuffer);
+        if (status != 0) {
+            NSLog(@"\t\t SampleBufferCreate: \t %@", (status == noErr) ? @"successful!" : @"failed...");
+        }
         
-        NSLog(@"\t\t SampleBufferCreate: \t %@", (status == noErr) ? @"successful!" : @"failed...");
     }
     
     if(status == noErr)
@@ -281,7 +281,17 @@ void decodeOutputCallback(
         tmpData = NULL;
     }
 }
-
+-(uint32_t)findFlgIndexData:(uint8_t*)frame lenth:(uint32_t)frameSize{
+    for (uint32_t i = 0; i < frameSize - 3; i++)
+    {
+        if (frame[i] == 0x00 && frame[i+1] == 0x00 && frame[i+2] == 0x00 && frame[i+3] == 0x01)
+        {
+            
+            return i;
+        }
+    }
+    return -1;
+}
 //解码
 - (void) render:(CMSampleBufferRef)sampleBuffer
 {
